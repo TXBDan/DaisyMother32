@@ -11,13 +11,13 @@
 //  Encoder press:  cycle target → VCO1 → VCO2 → LFO → VCO1 …
 //  Encoder rotate: cycle waveforms for the selected target
 //                  VCO1/VCO2: Saw → Square
-//                  LFO:       Triangle → Square → Saw → Sine
+//                  LFO:       Sine → Triangle → Saw → Square
 //
 //  LED 1: shows selected target + waveform
 //    VCO1 Saw    = Cyan      VCO1 Square = Blue
 //    VCO2 Saw    = Yellow    VCO2 Square = Red
-//    LFO Tri     = Purple    LFO Square  = White
-//    LFO Saw     = Orange    LFO Sine    = Green
+//    LFO Sine    = Green     LFO Tri     = Purple
+//    LFO Saw     = Orange    LFO Square  = White
 //
 //  Knob 1: VCO1 pitch ±1 octave (centre = no offset)
 //  Knob 2: VCO2 pitch ±1 octave (centre = unison with VCO1)
@@ -30,6 +30,8 @@
 //  MIDI: NoteOn / NoteOff (with note-priority stack)
 //        CC1=cutoff  CC21=res    CC22=glide  CC23=VCO1/VCO2 blend  CC24=LFO rate
 //        CC25=VCO mod amt  CC26=VCF mod amt  CC27=attack  CC28=decay
+//        CC29=VCO1 pitch ±1oct  CC30=VCO2 pitch ±1oct
+//        CC31=VCO1 wave  CC32=VCO2 wave  CC33=LFO wave
 //        CC44=VCO mod source (0=EG, 127=LFO)
 //        CC45=VCO mod dest (0=pulse width, 127=frequency)
 //        CC46=VCF mod source (0=LFO, 127=EG)  CC64=sustain pedal
@@ -119,13 +121,13 @@ static int vco_wave_idx      = 0;        // VCO1 waveform
 static int vco2_wave_idx     = 0;        // VCO2 waveform
 
 static const int LFO_WAVES[] = {
-    Oscillator::WAVE_TRI,
-    Oscillator::WAVE_POLYBLEP_SQUARE,
-    Oscillator::WAVE_POLYBLEP_SAW,
     Oscillator::WAVE_SIN,
+    Oscillator::WAVE_TRI,
+    Oscillator::WAVE_POLYBLEP_SAW,
+    Oscillator::WAVE_POLYBLEP_SQUARE,
 };
 static const int NUM_LFO_WAVES = 4;
-static int lfo_wave_idx      = 3;        // default: Sine
+static int lfo_wave_idx      = 0;        // default: Sine
 
 static const float VCO1_WAVE_COLORS[2][3] = {
     {0.0f, 1.0f, 1.0f},   // Saw    – Cyan
@@ -136,10 +138,10 @@ static const float VCO2_WAVE_COLORS[2][3] = {
     {1.0f, 0.0f, 0.0f},   // Square – Red
 };
 static const float LFO_WAVE_COLORS[4][3] = {
-    {0.5f, 0.0f, 1.0f},   // Tri    – Purple
-    {1.0f, 1.0f, 1.0f},   // Square – White
-    {1.0f, 0.4f, 0.0f},   // Saw    – Orange
     {0.0f, 1.0f, 0.0f},   // Sine   – Green
+    {0.5f, 0.0f, 1.0f},   // Tri    – Purple
+    {1.0f, 0.4f, 0.0f},   // Saw    – Orange
+    {1.0f, 1.0f, 1.0f},   // Square – White
 };
 
 // Previous knob values for change detection
@@ -258,6 +260,22 @@ static void HandleMidi(MidiEvent m)
                 case 28: // Envelope decay
                     env_decay = val * val * 5.0f;
                     env.SetDecayTime(env_decay);
+                    break;
+                case 29: // VCO1 pitch ±1 octave
+                    vco_pitch_mult = powf(2.0f, (val - 0.5f) * 2.0f);
+                    break;
+                case 30: // VCO2 pitch ±1 octave
+                    vco2_pitch_mult = powf(2.0f, (val - 0.5f) * 2.0f);
+                    break;
+                case 31: // VCO1 waveform (0-63=Saw, 64-127=Square)
+                    vco_wave_idx = p.value * NUM_VCO_WAVES / 128;
+                    break;
+                case 32: // VCO2 waveform (0-63=Saw, 64-127=Square)
+                    vco2_wave_idx = p.value * NUM_VCO_WAVES / 128;
+                    break;
+                case 33: // LFO waveform (0-31=Sine, 32-63=Tri, 64-95=Saw, 96-127=Square)
+                    lfo_wave_idx = p.value * NUM_LFO_WAVES / 128;
+                    lfo.SetWaveform(LFO_WAVES[lfo_wave_idx]);
                     break;
                 case 44: // VCO mod source: 0=EG, 127=LFO
                     vco_mod_source = (p.value >= 64) ? 0 : 1;
