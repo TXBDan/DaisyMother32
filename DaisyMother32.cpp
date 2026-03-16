@@ -31,7 +31,7 @@
 //        CC1=cutoff  CC21=res    CC22=glide  CC23=VCO1/VCO2 blend  CC24=LFO rate
 //        CC25=VCO mod amt  CC26=VCF mod amt  CC27=attack  CC28=decay
 //        CC29=VCO1 pitch ±1oct  CC30=VCO2 pitch ±1oct
-//        CC31=VCO1 wave  CC32=VCO2 wave  CC33=LFO wave
+//        CC31=VCO1 wave  CC32=VCO2 wave  CC33=LFO wave  CC34=pulse width
 //        CC44=VCO mod source (0=EG, 127=LFO)
 //        CC45=VCO mod dest (0=pulse width, 127=frequency)
 //        CC46=VCF mod source (0=LFO, 127=EG)  CC64=sustain pedal
@@ -67,7 +67,7 @@ static float sample_rate;
 static float vco_freq        = 261.63f;  // current (glided) frequency (C4)
 static float vco_target_freq = 261.63f;  // target frequency
 static float vco_pitch_mult  = 1.0f;     // ±1 octave from knob 1
-static float vco_pw          = 0.5f;     // pulse width (0-1)
+static float vco_pw          = 0.5f;     // pulse width shared by both VCOs (0-1)
 static float glide_time      = 0.0f;     // seconds (0 = off, CC22)
 
 // VCO2
@@ -277,6 +277,9 @@ static void HandleMidi(MidiEvent m)
                     lfo_wave_idx = p.value * NUM_LFO_WAVES / 128;
                     lfo.SetWaveform(LFO_WAVES[lfo_wave_idx]);
                     break;
+                case 34: // VCO pulse width for both VCOs (0=5%, 127=95%)
+                    vco_pw = 0.05f + val * 0.9f;
+                    break;
                 case 44: // VCO mod source: 0=EG, 127=LFO
                     vco_mod_source = (p.value >= 64) ? 0 : 1;
                     break;
@@ -416,7 +419,7 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
 
         // --- VCO1 ---
         float modded_freq = (vco_freq + vco_freq_mod) * vco_pitch_mult;
-        float modded_pw   = fclamp(vco_pw + vco_pw_mod, 0.05f, 0.95f);
+        float modded_pw = fclamp(vco_pw + vco_pw_mod, 0.05f, 0.95f);
         vco.SetWaveform(VCO_WAVES[vco_wave_idx]);
         vco.SetFreq(modded_freq);
         vco.SetPw(modded_pw);
